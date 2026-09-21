@@ -1001,11 +1001,11 @@ body.fancybox-open .ventaur-to-top {
   }
 
   .ventaur-video-showcase__grid {
-    grid-auto-flow: column;
-    grid-auto-columns: 88%;
-    grid-template-columns: none;
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
-    overflow-x: auto;
+    overflow-x: visible;
     padding: 3px 2px 12px;
     scroll-snap-type: inline mandatory;
     scrollbar-width: none;
@@ -1244,3 +1244,27 @@ body.fancybox-open .ventaur-to-top {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* Video controls remain outside the embedded player on small screens. */
+.ventaur-video-showcase__heading p { display: none !important; }
+.ventaur-video-card { aspect-ratio: auto; min-width: 0; }
+.ventaur-video-card iframe { aspect-ratio: 16 / 9; height: auto; }
+.ventaur-video-sound {
+  display: block; width: 100%; min-height: 44px;
+  padding: 8px 4px; border: 0; background: #0874b9;
+  color: white; font: inherit; font-size: 13px; font-weight: 700;
+  cursor: pointer;
+}
+.ventaur-video-sound:focus-visible { outline: 3px solid #61c8f5; outline-offset: -3px; }
+@media (max-width: 767px) {
+  .ventaur-video-card__number { width: 22px; height: 22px; top: 5px; inset-inline-start: 5px; font-size: 10px; }
+  .ventaur-video-showcase__grid { gap: 8px; }
+}
+
+/* Video layout v3: override older carousel rules in both languages. */
+#ventaur-video-showcase { grid-column: 1 / -1; width: calc(100% - 24px); max-width: 1180px; margin-inline: auto; }
+#ventaur-video-showcase .ventaur-video-showcase__grid { display:grid !important; grid-template-columns:repeat(2,minmax(0,1fr)) !important; grid-auto-flow:row !important; overflow:visible !important; scroll-snap-type:none !important; transform:none !important; width:100% !important; }
+#ventaur-video-showcase .ventaur-video-card { width:100% !important; min-width:0 !important; max-width:100% !important; margin:0 !important; transform:none !important; scroll-margin-block:100px; }
+#ventaur-video-showcase iframe { width:100% !important; height:auto !important; aspect-ratio:16/9; }
+#ventaur-video-showcase .ventaur-video-sound[hidden] { display:none !important; }
+#ventaur-video-showcase .ventaur-video-sound:disabled { opacity:.6; cursor:wait; }
