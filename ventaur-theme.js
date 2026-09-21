@@ -134,7 +134,6 @@
       '<div class="ventaur-video-showcase__heading">' +
         '<span class="ventaur-video-showcase__eyebrow">VENTAUR</span>' +
         '<h2>' + copy.videosTitle + '</h2>' +
-        '<p>' + copy.videosText + '</p>' +
       '</div>' +
       '<div class="ventaur-video-showcase__grid">' +
         '<div class="ventaur-video-card is-active" data-video-id="tu9v4g">' +
@@ -155,6 +154,7 @@
     var timer = null;
     var inView = false;
     var videoDuration = 15300;
+    var manualSound = false;
 
     function videoUrl(id, autoplay) {
       return 'https://streamable.com/e/' + id +
@@ -181,10 +181,38 @@
     }
 
     cards.forEach(function (card, index) {
-      card.addEventListener('click', function () {
-        if (index === activeIndex) return;
-        inView = true;
-        showVideo(index);
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'ventaur-video-sound';
+      button.textContent = isEnglish ? 'Play with sound' : 'تشغيل بالصوت';
+      button.setAttribute('aria-pressed', 'false');
+      card.appendChild(button);
+      button.addEventListener('click', function () {
+        if (timer) window.clearTimeout(timer);
+        timer = null;
+        if (manualSound && activeIndex === index) {
+          manualSound = false;
+          cards.forEach(function (item) {
+            var b = item.querySelector('.ventaur-video-sound');
+            b.textContent = isEnglish ? 'Play with sound' : 'تشغيل بالصوت';
+            b.setAttribute('aria-pressed', 'false');
+          });
+          showVideo(index);
+          return;
+        }
+        manualSound = true;
+        activeIndex = index;
+        cards.forEach(function (item, i) {
+          item.classList.toggle('is-active', i === index);
+          var b = item.querySelector('.ventaur-video-sound');
+          b.textContent = i === index
+            ? (isEnglish ? 'Mute / Auto' : 'كتم / تلقائي')
+            : (isEnglish ? 'Play with sound' : 'تشغيل بالصوت');
+          b.setAttribute('aria-pressed', String(i === index));
+          frames[i].src = 'https://streamable.com/e/' + item.getAttribute('data-video-id') +
+            '?autoplay=' + (i === index ? '1' : '0') +
+            '&muted=' + (i === index ? '0' : '1') + '&loop=0&nocontrols=0&hd=1';
+        });
       });
     });
 
@@ -192,8 +220,10 @@
       var videoObserver = new IntersectionObserver(function (entries) {
         entries.forEach(function (entry) {
           if (entry.target !== section) return;
-          inView = entry.isIntersecting && entry.intersectionRatio >= 0.2 && !document.hidden;
-          showVideo(activeIndex);
+          var visible = entry.isIntersecting && entry.intersectionRatio >= 0.2 && !document.hidden;
+          if (visible === inView) return;
+          inView = visible;
+          if (!manualSound) showVideo(activeIndex);
         });
       }, { threshold: [0, 0.2, 0.5] });
       videoObserver.observe(section);
@@ -201,7 +231,7 @@
       document.addEventListener('visibilitychange', function () {
         var rect = section.getBoundingClientRect();
         inView = !document.hidden && rect.bottom > 0 && rect.top < window.innerHeight;
-        showVideo(activeIndex);
+        if (!manualSound) showVideo(activeIndex);
       });
     } else {
       inView = true;
