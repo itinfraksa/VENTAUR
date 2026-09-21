@@ -117,13 +117,15 @@
 
   function createVideoShowcase() {
     if (document.getElementById('ventaur-video-showcase')) return;
-    if (!/^\/(?:ar|en)?\/?$/i.test(window.location.pathname)) return;
+    var isCategory = /\/c1983831913\/?$/i.test(window.location.pathname);
+    if (!isCategory && !/^\/(?:ar|en)?\/?$/i.test(window.location.pathname)) return;
 
     var productBlock = document.querySelector('.s-block--tabs-produtcs, .s-block--featured-products');
     if (!productBlock) {
       var productSlider = document.querySelector('salla-products-slider');
       productBlock = productSlider ? (productSlider.closest('section') || productSlider) : null;
     }
+    if (isCategory) productBlock = document.querySelector('salla-products-list');
     if (!productBlock || !productBlock.parentNode) return;
 
     var section = document.createElement('section');
@@ -151,91 +153,128 @@
     var cards = Array.prototype.slice.call(section.querySelectorAll('.ventaur-video-card'));
     var frames = cards.map(function (card) { return card.querySelector('iframe'); });
     var activeIndex = 0;
-    var timer = null;
+    var players = [];
+    var ready = [];
+    var soundOn = false;
     var inView = false;
-    var videoDuration = 15300;
-    var manualSound = false;
+    var started = false;
+    var pausedByUser = false;
+    var reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    function videoUrl(id, autoplay) {
-      return 'https://streamable.com/e/' + id +
-        '?autoplay=' + (autoplay ? '1' : '0') +
-        '&muted=1&loop=0&nocontrols=0&hd=1';
+    function visible() {
+      var r = section.getBoundingClientRect();
+      return !document.hidden && r.bottom > 80 && r.top < window.innerHeight - 80;
     }
-
-    function showVideo(index) {
-      if (timer) window.clearTimeout(timer);
-      timer = null;
-      activeIndex = index;
-
-      cards.forEach(function (card, cardIndex) {
-        var isActive = cardIndex === activeIndex;
-        card.classList.toggle('is-active', isActive);
-        frames[cardIndex].src = videoUrl(card.getAttribute('data-video-id'), isActive && inView);
+    function centerCard(index) {
+      if (!visible()) return;
+      cards[index].scrollIntoView({block: 'center', inline: 'nearest', behavior: reducedMotion ? 'auto' : 'smooth'});
+    }
+    function labels() {
+      cards.forEach(function (card, i) {
+        card.classList.toggle('is-active', i === activeIndex);
+        var button = card.querySelector('button');
+        button.textContent = soundOn && i === activeIndex
+          ? (isEnglish ? 'Mute sound' : 'كتم الصوت')
+          : (isEnglish ? 'Play with sound' : 'تشغيل بالصوت');
+        button.setAttribute('aria-pressed', String(soundOn && i === activeIndex));
       });
-
-      if (inView) {
-        timer = window.setTimeout(function () {
-          showVideo((activeIndex + 1) % cards.length);
-        }, videoDuration);
-      }
     }
-
-    cards.forEach(function (card, index) {
+    function select(index, center, restart) {
+      activeIndex = index;
+      labels();
+      players.forEach(function (player, i) {
+        if (!ready[i]) return;
+        if (i !== index) { player.pause(); return; }
+        if (restart) player.setCurrentTime(0);
+        if (soundOn) { player.unmute(); player.setVolume(100); }
+        else player.mute();
+        if (visible()) player.play();
+      });
+      if (center) centerCard(index);
+    }
+    cards.forEach(function (card, i) {
       var button = document.createElement('button');
       button.type = 'button';
       button.className = 'ventaur-video-sound';
-      button.textContent = isEnglish ? 'Play with sound' : 'تشغيل بالصوت';
-      button.setAttribute('aria-pressed', 'false');
+      button.disabled = true;
+      button.textContent = isEnglish ? 'Loading…' : 'جارٍ التحميل…';
       card.appendChild(button);
       button.addEventListener('click', function () {
-        if (timer) window.clearTimeout(timer);
-        timer = null;
-        if (manualSound && activeIndex === index) {
-          manualSound = false;
-          cards.forEach(function (item) {
-            var b = item.querySelector('.ventaur-video-sound');
-            b.textContent = isEnglish ? 'Play with sound' : 'تشغيل بالصوت';
-            b.setAttribute('aria-pressed', 'false');
-          });
-          showVideo(index);
-          return;
-        }
-        manualSound = true;
-        activeIndex = index;
-        cards.forEach(function (item, i) {
-          item.classList.toggle('is-active', i === index);
-          var b = item.querySelector('.ventaur-video-sound');
-          b.textContent = i === index
-            ? (isEnglish ? 'Mute / Auto' : 'كتم / تلقائي')
-            : (isEnglish ? 'Play with sound' : 'تشغيل بالصوت');
-          b.setAttribute('aria-pressed', String(i === index));
-          frames[i].src = 'https://streamable.com/e/' + item.getAttribute('data-video-id') +
-            '?autoplay=' + (i === index ? '1' : '0') +
-            '&muted=' + (i === index ? '0' : '1') + '&loop=0&nocontrols=0&hd=1';
-        });
+        soundOn = !(soundOn && activeIndex === i);
+        pausedByUser = false;
+        select(i, true, false);
       });
     });
 
-    if ('IntersectionObserver' in window) {
-      var videoObserver = new IntersectionObserver(function (entries) {
-        entries.forEach(function (entry) {
-          if (entry.target !== section) return;
-          var visible = entry.isIntersecting && entry.intersectionRatio >= 0.2 && !document.hidden;
-          if (visible === inView) return;
-          inView = visible;
-          if (!manualSound) showVideo(activeIndex);
+    function initializePlayers() {
+      cards.forEach(function (card, i) {
+        // Do not use muted=1: Streamable may remove native volume controls.
+        frames[i].src = 'https://streamable.com/e/' + card.getAttribute('data-video-id') +
+          '?autoplay=0&loop=0&nocontrols=0&playsinline=1';
+        var player = new window.playerjs.Player(frames[i]);
+        players[i] = player;
+        player.on('ready', function () {
+          ready[i] = true;
+          card.querySelector('button').disabled = false;
+          player.mute();
+          player.on('play', function () {
+            if (!visible()) { player.pause(); return; }
+            var changed = activeIndex !== i;
+            activeIndex = i;
+            pausedByUser = false;
+            players.forEach(function (other, j) { if (j !== i && ready[j]) other.pause(); });
+            labels();
+            if (changed) centerCard(i);
+          });
+          player.on('pause', function () {
+            if (i === activeIndex && inView && visible()) pausedByUser = true;
+          });
+          player.on('ended', function () {
+            if (i !== activeIndex || !visible()) return;
+            pausedByUser = false;
+            select((i + 1) % cards.length, true, true);
+          });
+          labels();
+          if (i === activeIndex && visible() && !pausedByUser) {
+            started = true;
+            select(i, false, false);
+          }
         });
-      }, { threshold: [0, 0.2, 0.5] });
-      videoObserver.observe(section);
-
-      document.addEventListener('visibilitychange', function () {
-        var rect = section.getBoundingClientRect();
-        inView = !document.hidden && rect.bottom > 0 && rect.top < window.innerHeight;
-        if (!manualSound) showVideo(activeIndex);
       });
-    } else {
-      inView = true;
-      showVideo(0);
+      function updateVisibility() {
+        var next = visible();
+        if (next === inView && started) return;
+        inView = next;
+        if (!next) {
+          players.forEach(function (p, i) { if (ready[i]) p.pause(); });
+        } else if (ready[activeIndex] && !pausedByUser) {
+          started = true;
+          select(activeIndex, false, false);
+        }
+      }
+      if ('IntersectionObserver' in window) {
+        new IntersectionObserver(updateVisibility, {threshold: [0, 0.1, 0.5, 1]}).observe(section);
+      }
+      document.addEventListener('visibilitychange', updateVisibility);
+      window.addEventListener('scroll', updateVisibility, {passive: true});
+      updateVisibility();
+    }
+    function fallback() {
+      cards.forEach(function (card, i) {
+        frames[i].src = 'https://streamable.com/e/' + card.getAttribute('data-video-id') + '?autoplay=0&nocontrols=0';
+        card.querySelector('button').hidden = true;
+      });
+    }
+    if (window.playerjs && window.playerjs.Player) initializePlayers();
+    else {
+      var script = document.createElement('script');
+      script.src = 'https://cdn.embed.ly/player-0.1.0.min.js';
+      script.onload = function () {
+        if (window.playerjs && window.playerjs.Player) initializePlayers();
+        else fallback();
+      };
+      script.onerror = fallback;
+      document.head.appendChild(script);
     }
   }
 
