@@ -15,6 +15,9 @@
     accessoriesText: 'Style and practicality for your car',
     deliveryTitle: 'Fast Delivery',
     deliveryText: 'Across all cities in Saudi Arabia',
+    videosTitle: 'VENTAUR in motion',
+    videosText: 'See our products up close — the videos play automatically in sequence',
+    videosLabel: 'VENTAUR product videos',
     topLabel: 'Back to top',
     topTitle: 'Back to top',
     legalLabel: 'Commercial registration, payments and copyright',
@@ -32,6 +35,9 @@
     accessoriesText: 'أناقة وعملية لسيارتك',
     deliveryTitle: 'توصيل سريع',
     deliveryText: 'إلى جميع مدن المملكة',
+    videosTitle: 'شاهد VENTAUR عن قرب',
+    videosText: 'استعرض منتجاتنا — الفيديوهات تعمل تلقائيًا بالتتابع',
+    videosLabel: 'فيديوهات منتجات VENTAUR',
     topLabel: 'العودة إلى أعلى الصفحة',
     topTitle: 'أعلى الصفحة',
     legalLabel: 'السجل التجاري وأنظمة الدفع وحقوق النشر',
@@ -107,6 +113,111 @@
       '</div>';
 
     main.insertBefore(bar, main.firstChild);
+  }
+
+  function createVideoShowcase() {
+    if (document.getElementById('ventaur-video-showcase')) return;
+    if (!/^\/(?:ar|en)?\/?$/i.test(window.location.pathname)) return;
+
+    var productBlock = document.querySelector('.s-block--tabs-produtcs, .s-block--featured-products');
+    if (!productBlock) {
+      var productSlider = document.querySelector('salla-products-slider');
+      productBlock = productSlider ? (productSlider.closest('section') || productSlider) : null;
+    }
+    if (!productBlock || !productBlock.parentNode) return;
+
+    var section = document.createElement('section');
+    section.id = 'ventaur-video-showcase';
+    section.className = 'ventaur-video-showcase';
+    section.setAttribute('aria-label', copy.videosLabel);
+    section.innerHTML =
+      '<div class="ventaur-video-showcase__heading">' +
+        '<span class="ventaur-video-showcase__eyebrow">VENTAUR</span>' +
+        '<h2>' + copy.videosTitle + '</h2>' +
+        '<p>' + copy.videosText + '</p>' +
+      '</div>' +
+      '<div class="ventaur-video-showcase__grid">' +
+        '<div class="ventaur-video-card is-active" data-video-id="tu9v4g">' +
+          '<span class="ventaur-video-card__number">01</span>' +
+          '<iframe title="VENTAUR video 1" loading="eager" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>' +
+        '</div>' +
+        '<div class="ventaur-video-card" data-video-id="05o4ct">' +
+          '<span class="ventaur-video-card__number">02</span>' +
+          '<iframe title="VENTAUR video 2" loading="eager" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>' +
+        '</div>' +
+      '</div>';
+
+    productBlock.parentNode.insertBefore(section, productBlock);
+
+    var cards = Array.prototype.slice.call(section.querySelectorAll('.ventaur-video-card'));
+    var frames = cards.map(function (card) { return card.querySelector('iframe'); });
+    var activeIndex = 0;
+    var timer = null;
+    var inView = false;
+    var videoDuration = 15300;
+
+    function videoUrl(id, autoplay) {
+      return 'https://streamable.com/e/' + id +
+        '?autoplay=' + (autoplay ? '1' : '0') +
+        '&muted=1&loop=0&nocontrols=0&hd=1';
+    }
+
+    function showVideo(index) {
+      if (timer) window.clearTimeout(timer);
+      timer = null;
+      activeIndex = index;
+
+      cards.forEach(function (card, cardIndex) {
+        var isActive = cardIndex === activeIndex;
+        card.classList.toggle('is-active', isActive);
+        frames[cardIndex].src = videoUrl(card.getAttribute('data-video-id'), isActive && inView);
+      });
+
+      if (inView) {
+        timer = window.setTimeout(function () {
+          showVideo((activeIndex + 1) % cards.length);
+        }, videoDuration);
+      }
+    }
+
+    cards.forEach(function (card, index) {
+      card.addEventListener('click', function () {
+        if (index === activeIndex) return;
+        inView = true;
+        showVideo(index);
+      });
+    });
+
+    if ('IntersectionObserver' in window) {
+      var videoObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.target !== section) return;
+          inView = entry.isIntersecting && entry.intersectionRatio >= 0.2 && !document.hidden;
+          showVideo(activeIndex);
+        });
+      }, { threshold: [0, 0.2, 0.5] });
+      videoObserver.observe(section);
+
+      document.addEventListener('visibilitychange', function () {
+        var rect = section.getBoundingClientRect();
+        inView = !document.hidden && rect.bottom > 0 && rect.top < window.innerHeight;
+        showVideo(activeIndex);
+      });
+    } else {
+      inView = true;
+      showVideo(0);
+    }
+  }
+
+  function scheduleVideoShowcase() {
+    var attempts = 0;
+    var timer = window.setInterval(function () {
+      attempts += 1;
+      createVideoShowcase();
+      if (document.getElementById('ventaur-video-showcase') || attempts >= 40) {
+        window.clearInterval(timer);
+      }
+    }, 250);
   }
 
   function createBackToTopButton() {
@@ -205,6 +316,7 @@
   function initializeVentaurTheme() {
     styleUserMenu();
     createPromiseBar();
+    scheduleVideoShowcase();
     createWhatsAppButton();
     createBackToTopButton();
     localizeEnglishFooter();
